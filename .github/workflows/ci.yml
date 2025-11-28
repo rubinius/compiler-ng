@@ -1,0 +1,82 @@
+name: llvm-min-baseline
+
+on:
+  push:
+    branches: [ "rubinius" ]
+
+jobs:
+  build:
+    name: baseline (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    env:
+      CC: clang
+      CXX: clang++
+      BUILD_DIR: build-rbx-min
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 2G
+
+    steps:
+      - name: Checkout llvm-project
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install deps (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang ninja-build cmake ccache
+
+      - name: Install deps (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew install ninja cmake ccache
+
+      # Determine clang version to make cache keys stable but safe.
+      - name: Get clang version
+        id: vars
+        shell: bash
+        run: |
+          # First token after "clang version", e.g., 18.1.8
+          v="$(clang --version | head -n1 | sed -E 's/.*clang version ([0-9]+(\.[0-9]+)*).*/\1/')"
+          echo "clang_ver=$v" >> "$GITHUB_OUTPUT"
+          echo "clang version: $v"
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: >
+            ccache-${{ runner.os }}-clang-${{ steps.vars.outputs.clang_ver }}-
+            ${{ hashFiles(
+              'llvm/**/CMakeLists.txt',
+              'mlir/**/CMakeLists.txt',
+              'llvm/cmake/**/*',
+              'mlir/cmake/**/*'
+            ) }}
+          restore-keys: |
+            ccache-${{ runner.os }}-clang-${{ steps.vars.outputs.clang_ver }}-
+            ccache-${{ runner.os }}-
+
+      - name: Configure minimal LLVM+MLIR (with ccache)
+        run: |
+          make config
+
+      - name: Build baseline
+        run: |
+          make build
+
+      - name: ccache stats
+        if: always()
+        run: |
+          ccache -s || true
+
+      - name: Run Tests
+        run: |
+          make test
