@@ -1,8 +1,7 @@
 name: rbx-llvm-min-baseline
 
 on:
-  push:
-    branches: [ "rubinius" ]
+  workflow_dispatch:
 
 jobs:
   build:
