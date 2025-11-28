@@ -1,4 +1,4 @@
-name: llvm-min-baseline
+name: rbx-llvm-min-baseline
 
 on:
   push:
