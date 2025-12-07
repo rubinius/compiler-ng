@@ -1,7 +1,9 @@
+add_llvm_component_group(Rubinius)
+
 # TableGen setup: all Rubinius .td defs should be rooted at Rubinius.td
 set(LLVM_TARGET_DEFINITIONS Rubinius.td)
 
-# Generate the minimal set of backend inc files we actually use.
+# Generate the backend's TableGen outputs.
 tablegen(LLVM RubiniusGenRegisterInfo.inc   -gen-register-info)
 tablegen(LLVM RubiniusGenInstrInfo.inc      -gen-instr-info)
 tablegen(LLVM RubiniusGenSubtargetInfo.inc  -gen-subtarget)
@@ -12,51 +14,33 @@ tablegen(LLVM RubiniusGenMCCodeEmitter.inc  -gen-emitter)
 add_public_tablegen_target(RubiniusCommonTableGen)
 
 # The core codegen library for the Rubinius backend.
-# Name must match the component in llvm/lib/Target/Rubinius/LLVMBuild.txt
-# (RubiniusCodeGen).
+# Name must match the component in llvm/lib/Target/Rubinius/LLVMBuild.txt (RubiniusCodeGen).
 add_llvm_target(RubiniusCodeGen
   RubiniusAsmPrinter.cpp
-  RubiniusInstrInfo.cpp
   RubiniusISelDAGToDAG.cpp
   RubiniusISelLowering.cpp
+  RubiniusInstrInfo.cpp
   RubiniusMCInstLower.cpp
   RubiniusRegisterInfo.cpp
   RubiniusSubtarget.cpp
+  RubiniusTargetInfo.cpp
   RubiniusTargetMachine.cpp
-)
-
-add_llvm_component_library(LLVMRubiniusCodeGen
-  RubiniusTargetMachine.cpp
-  RubiniusISelLowering.cpp
-  RubiniusSubtarget.cpp
-  RubiniusAsmPrinter.cpp
-
-  DEPENDS
-  RubiniusCommonTableGen
 
   LINK_COMPONENTS
-  AsmPrinter
-  Core
-  CodeGen
-  MC
-  SelectionDAG
-  Support
-  Target
+    AsmPrinter
+    CodeGen
+    Core
+    MC
+    SelectionDAG
+    Support
+    Target
+    RubiniusDesc
+    RubiniusInfo
+
+  ADD_TO_COMPONENT
+    Rubinius
 )
 
-add_llvm_component_library(LLVMRubiniusDesc
-  MCTargetDesc/RubiniusMCTargetDesc.cpp
-  MCTargetDesc/RubiniusMCAsmInfo.cpp
-
-  DEPENDS
-  RubiniusCommonTableGen
-
-  LINK_COMPONENTS
-  MC
-  MCDisassembler
-  Support
-)
-
-# These must exist and have their own CMakeLists.txt files.
+# These subdirectories define the MC-layer and target-info libraries.
 add_subdirectory(MCTargetDesc)
 add_subdirectory(TargetInfo)

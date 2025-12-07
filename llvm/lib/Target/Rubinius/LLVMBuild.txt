@@ -1,0 +1,19 @@
+[component_0]
+type = TargetGroup
+name = Rubinius
+parent = Target
+
+[component_1]
+type = Library
+name = RubiniusCodeGen
+parent = Rubinius
+
+[component_2]
+type = Library
+name = RubiniusDesc
+parent = Rubinius
+
+[component_3]
+type = Library
+name = RubiniusInfo
+parent = Rubinius

@@ -1,11 +1,12 @@
 add_mlir_conversion_library(MLIRRubyToLLVM
   RubyToLLVM.cpp
 
-  LINK_COMPONENTS
-  Core
+  DEPENDS
+    MLIRLLVMIR
+    MLIRRubiniusRubyOpsIncGen
 
   LINK_LIBS PUBLIC
-  MLIRIR
-  MLIRLLVMIR
-  MLIRRuby
+    MLIRRubiniusRuby
+    MLIRLLVMIR
+    MLIRIR
 )

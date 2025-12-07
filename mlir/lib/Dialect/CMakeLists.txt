@@ -44,7 +44,7 @@ add_subdirectory(Vector)
 add_subdirectory(WasmSSA)
 add_subdirectory(X86Vector)
 add_subdirectory(XeGPU)
-add_subdirectory(Ruby)
+add_subdirectory(Rubinius)
 
 set(LLVM_OPTIONAL_SOURCES
   Traits.cpp

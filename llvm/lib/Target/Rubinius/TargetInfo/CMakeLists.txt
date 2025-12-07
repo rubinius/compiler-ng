@@ -1,6 +1,9 @@
-add_llvm_library(LLVMRubiniusTargetInfo
+add_llvm_component_library(LLVMRubiniusInfo
   RubiniusTargetInfo.cpp
 
   LINK_COMPONENTS
-  Support
+    Support
+
+  ADD_TO_COMPONENT
+    Rubinius
 )
