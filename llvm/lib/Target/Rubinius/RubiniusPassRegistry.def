@@ -1,0 +1,11 @@
+// This file is used as the registry of passes that are part of the Rubinius backend.
+
+#ifndef FUNCTION_PASS
+#define FUNCTION_PASS(NAME, CREATE_PASS)
+#endif
+#undef FUNCTION_PASS
+
+#ifndef FUNCTION_PASS_WITH_PARAMS
+#define FUNCTION_PASS_WITH_PARAMS(NAME, CLASS, CREATE_PASS, PARSER, PARAMS)
+#endif
+#undef FUNCTION_PASS_WITH_PARAMS

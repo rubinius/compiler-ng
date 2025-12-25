@@ -1,23 +1,46 @@
 #pragma once
+
+#include "llvm/Config/config.h"
+#include "llvm/MC/MCContext.h"
 #include "llvm/Support/DataTypes.h"
+
 #include <memory>
 
 namespace llvm {
-class MCAsmInfo;
-class MCSubtargetInfo;
-class MCInstrInfo;
-class MCRegisterInfo;
+class MCAsmBackend;
+class MCCodeEmitter;
 class MCContext;
+class MCInstrInfo;
+class MCObjectTargetWriter;
+class MCRegisterInfo;
+class MCSubtargetInfo;
+class MCTargetOptions;
 class Target;
-class Triple;
-class StringRef;
-class raw_ostream;
 
-MCAsmInfo *createRubiniusMCAsmInfo(const Triple &TT, const MCTargetOptions &);
-MCInstrInfo *createRubiniusMCInstrInfo();
-MCRegisterInfo *createRubiniusMCRegisterInfo();
-MCSubtargetInfo *createRubiniusMCSubtargetInfo(const Triple &TT,
-                                           StringRef CPU, StringRef FS);
+MCCodeEmitter *createRubiniusMCCodeEmitter(const MCInstrInfo &MCII, MCContext &Ctx);
+MCCodeEmitter *createRubiniusbeMCCodeEmitter(const MCInstrInfo &MCII,
+                                        MCContext &Ctx);
 
-Target &getTheRubiniusTarget();
+MCAsmBackend *createRubiniusAsmBackend(const Target &T, const MCSubtargetInfo &STI,
+                                  const MCRegisterInfo &MRI,
+                                  const MCTargetOptions &Options);
+MCAsmBackend *createRubiniusbeAsmBackend(const Target &T, const MCSubtargetInfo &STI,
+                                    const MCRegisterInfo &MRI,
+                                    const MCTargetOptions &Options);
+std::unique_ptr<MCObjectTargetWriter> createRubiniusELFObjectWriter(uint8_t OSABI);
 } // namespace llvm
+
+// Defines symbolic names for Rubinius registers.  This defines a mapping from
+// register name to register number.
+//
+#define GET_REGINFO_ENUM
+#include "RubiniusGenRegisterInfo.inc"
+
+// Defines symbolic names for the Rubinius instructions.
+//
+#define GET_INSTRINFO_ENUM
+#define GET_INSTRINFO_MC_HELPER_DECLS
+#include "RubiniusGenInstrInfo.inc"
+
+#define GET_SUBTARGETINFO_ENUM
+#include "RubiniusGenSubtargetInfo.inc"

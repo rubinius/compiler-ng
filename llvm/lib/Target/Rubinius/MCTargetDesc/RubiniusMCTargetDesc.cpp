@@ -1,94 +1,145 @@
-#include "RubiniusMCTargetDesc.h"
-#include "RubiniusMCAsmInfo.h"
-#include "RubiniusGenInstrInfo.inc"
-#include "RubiniusGenRegisterInfo.inc"
-#include "RubiniusGenSubtargetInfo.inc"
-
-#include "llvm/MC/MCAsmBackend.h"
-#include "llvm/MC/MCContext.h"
-#include "llvm/MC/MCELFObjectWriter.h"
+#include "MCTargetDesc/RubiniusMCTargetDesc.h"
+#include "MCTargetDesc/RubiniusInstPrinter.h"
+#include "MCTargetDesc/RubiniusMCAsmInfo.h"
+#include "TargetInfo/RubiniusTargetInfo.h"
+#include "llvm/MC/MCInstrAnalysis.h"
 #include "llvm/MC/MCInstrInfo.h"
-#include "llvm/MC/MCObjectWriter.h"
 #include "llvm/MC/MCRegisterInfo.h"
-#include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/TargetRegistry.h"
+#include "llvm/Support/Compiler.h"
+#include "llvm/TargetParser/Host.h"
+
+#define GET_INSTRINFO_MC_DESC
+#define ENABLE_INSTR_PREDICATE_VERIFIER
+#include "RubiniusGenInstrInfo.inc"
+
+#define GET_SUBTARGETINFO_MC_DESC
+#include "RubiniusGenSubtargetInfo.inc"
+
+#define GET_REGINFO_MC_DESC
+#include "RubiniusGenRegisterInfo.inc"
+
 using namespace llvm;
 
-Target &getTheRubiniusTarget(); // from TargetInfo
-
-MCAsmInfo *llvm::createRubiniusMCAsmInfo(const Triple &TT,
-    const MCTargetOptions &) {
-  return new RubiniusMCAsmInfo();
-}
-
-MCInstrInfo *llvm::createRubiniusMCInstrInfo() {
-  auto *X = new MCInstrInfo();
-  InitRubiniusMCInstrInfo(*X);
+static MCInstrInfo *createRubiniusMCInstrInfo() {
+  MCInstrInfo *X = new MCInstrInfo();
+  InitRubiniusMCInstrInfo(X);
   return X;
 }
 
-MCRegisterInfo *llvm::createRubiniusMCRegisterInfo() {
-  auto *X = new MCRegisterInfo();
-  InitRubiniusMCRegisterInfo(*X, /*RA=*/0);
+static MCRegisterInfo *createRubiniusMCRegisterInfo(const Triple &TT) {
+  MCRegisterInfo *X = new MCRegisterInfo();
+  InitRubiniusMCRegisterInfo(X, Rubinius::R11 /* RAReg doesn't exist */);
   return X;
 }
 
-MCSubtargetInfo *llvm::createRubiniusMCSubtargetInfo(const Triple &TT,
-    StringRef CPU, StringRef FS) {
-  return createRubiniusSubtargetInfoImpl(TT, CPU, FS);
+static MCSubtargetInfo *createRubiniusMCSubtargetInfo(const Triple &TT,
+                                                 StringRef CPU, StringRef FS) {
+  return createRubiniusMCSubtargetInfoImpl(TT, CPU, /*TuneCPU*/ CPU, FS);
+}
+
+static MCStreamer *
+createRubiniusMCStreamer(const Triple &T, MCContext &Ctx,
+                    std::unique_ptr<MCAsmBackend> &&MAB,
+                    std::unique_ptr<MCObjectWriter> &&OW,
+                    std::unique_ptr<MCCodeEmitter> &&Emitter) {
+  return createELFStreamer(Ctx, std::move(MAB), std::move(OW),
+                           std::move(Emitter));
+}
+
+static MCInstPrinter *createRubiniusMCInstPrinter(const Triple &T,
+                                             unsigned SyntaxVariant,
+                                             const MCAsmInfo &MAI,
+                                             const MCInstrInfo &MII,
+                                             const MCRegisterInfo &MRI) {
+  if (SyntaxVariant == 0)
+    return new RubiniusInstPrinter(MAI, MII, MRI);
+  return nullptr;
 }
 
 namespace {
-  class RubiniusELFObjectWriter : public MCELFObjectTargetWriter {
-    public:
-      RubiniusELFObjectWriter()
-        : MCELFObjectTargetWriter(/*Is64Bit=*/false, /*OSABI=*/0,
-            /*EMachine=*/0x7777, /*HasRelocationAddend=*/false) {}
 
-      unsigned getRelocType(MCContext &, const MCValue &,
-          const MCFixup &, bool) const override {
-        llvm_unreachable("No relocations supported in minimal Rubinius");
-      }
-  };
-} // namespace
+class RubiniusMCInstrAnalysis : public MCInstrAnalysis {
+public:
+  explicit RubiniusMCInstrAnalysis(const MCInstrInfo *Info)
+      : MCInstrAnalysis(Info) {}
 
-static std::unique_ptr<MCObjectTargetWriter>
-createRubiniusELFObjectWriter() {
-  return createELFObjectWriter(std::make_unique<RubiniusELFObjectWriter>());
+  bool evaluateBranch(const MCInst &Inst, uint64_t Addr, uint64_t Size,
+                      uint64_t &Target) const override {
+    // The target is the 3rd operand of cond inst and the 1st of uncond inst.
+    int32_t Imm;
+    if (isConditionalBranch(Inst)) {
+      if (Inst.getOpcode() == Rubinius::JCOND)
+        Imm = (short)Inst.getOperand(0).getImm();
+      else
+        Imm = (short)Inst.getOperand(2).getImm();
+    } else if (isUnconditionalBranch(Inst)) {
+      if (Inst.getOpcode() == Rubinius::JMP)
+        Imm = (short)Inst.getOperand(0).getImm();
+      else
+        Imm = (int)Inst.getOperand(0).getImm();
+    } else
+      return false;
+
+    Target = Addr + Size + Imm * Size;
+    return true;
+  }
+};
+
+} // end anonymous namespace
+
+static MCInstrAnalysis *createRubiniusInstrAnalysis(const MCInstrInfo *Info) {
+  return new RubiniusMCInstrAnalysis(Info);
 }
 
-namespace {
-  class RubiniusAsmBackend : public MCAsmBackend {
-    public:
-      RubiniusAsmBackend(const Target &T, const MCSubtargetInfo &STI)
-        : MCAsmBackend(SupportsRelaxation::None) {}
+extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeRubiniusTargetMC() {
+  for (Target *T :
+       {&getTheRubiniusleTarget(), &getTheRubiniusbeTarget(), &getTheRubiniusTarget()}) {
+    // Register the MC asm info.
+    RegisterMCAsmInfo<RubiniusMCAsmInfo> X(*T);
 
-      unsigned getNumFixupKinds() const override { return 0; }
-      bool writeNopData(raw_ostream &OS, uint64_t Count) const override {
-        for (uint64_t i = 0; i < Count; ++i)
-          OS << '\0';
-        return true;
-      }
+    // Register the MC instruction info.
+    TargetRegistry::RegisterMCInstrInfo(*T, createRubiniusMCInstrInfo);
 
-      std::unique_ptr<MCObjectTargetWriter>
-        createObjectTargetWriter() const override {
-          return createRubiniusELFObjectWriter();
-        }
-  };
-} // namespace
+    // Register the MC register info.
+    TargetRegistry::RegisterMCRegInfo(*T, createRubiniusMCRegisterInfo);
 
-extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeRubiniusTargetMC() {
-  Target &T = getTheRubiniusTarget();
+    // Register the MC subtarget info.
+    TargetRegistry::RegisterMCSubtargetInfo(*T,
+                                            createRubiniusMCSubtargetInfo);
 
-  RegisterMCAsmInfoFn X(T, createRubiniusMCAsmInfo);
-  TargetRegistry::RegisterMCInstrInfo(T, createRubiniusMCInstrInfo);
-  TargetRegistry::RegisterMCRegInfo(T, createRubiniusMCRegisterInfo);
-  TargetRegistry::RegisterMCSubtargetInfo(T, createRubiniusMCSubtargetInfo);
+    // Register the object streamer
+    TargetRegistry::RegisterELFStreamer(*T, createRubiniusMCStreamer);
 
-  TargetRegistry::RegisterMCAsmBackend(
-      T, [](const Target &T, const MCSubtargetInfo &STI, const MCRegisterInfo &,
-        const MCTargetOptions &) -> std::unique_ptr<MCAsmBackend> {
-      return std::make_unique<RubiniusAsmBackend>(T, STI);
-      });
+    // Register the MCInstPrinter.
+    TargetRegistry::RegisterMCInstPrinter(*T, createRubiniusMCInstPrinter);
+
+    // Register the MC instruction analyzer.
+    TargetRegistry::RegisterMCInstrAnalysis(*T, createRubiniusInstrAnalysis);
+  }
+
+  // Register the MC code emitter
+  TargetRegistry::RegisterMCCodeEmitter(getTheRubiniusleTarget(),
+                                        createRubiniusMCCodeEmitter);
+  TargetRegistry::RegisterMCCodeEmitter(getTheRubiniusbeTarget(),
+                                        createRubiniusbeMCCodeEmitter);
+
+  // Register the ASM Backend
+  TargetRegistry::RegisterMCAsmBackend(getTheRubiniusleTarget(),
+                                       createRubiniusAsmBackend);
+  TargetRegistry::RegisterMCAsmBackend(getTheRubiniusbeTarget(),
+                                       createRubiniusbeAsmBackend);
+
+  if (sys::IsLittleEndianHost) {
+    TargetRegistry::RegisterMCCodeEmitter(getTheRubiniusTarget(),
+                                          createRubiniusMCCodeEmitter);
+    TargetRegistry::RegisterMCAsmBackend(getTheRubiniusTarget(),
+                                         createRubiniusAsmBackend);
+  } else {
+    TargetRegistry::RegisterMCCodeEmitter(getTheRubiniusTarget(),
+                                          createRubiniusbeMCCodeEmitter);
+    TargetRegistry::RegisterMCAsmBackend(getTheRubiniusTarget(),
+                                         createRubiniusbeAsmBackend);
+  }
 }

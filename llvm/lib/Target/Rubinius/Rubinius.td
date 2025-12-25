@@ -1,43 +1,63 @@
+// Describe the Rubinius Target Machine
+
 include "llvm/Target/Target.td"
 
-// --- Subtarget / Instruction Set -----------------------------------------
+include "RubiniusRegisterInfo.td"
+include "RubiniusCallingConv.td"
+include "RubiniusInstrInfo.td"
+include "GISel/RubiniusRegisterBanks.td"
+
+
+defm : RemapAllTargetPseudoPointerOperands<GPR>;
 
 def RubiniusInstrInfo : InstrInfo;
 
-class RubiniusProc<string Name>
-  : Processor<Name, NoItineraries, []>;
-def : RubiniusProc<"generic">;
+class Proc<string Name, list<SubtargetFeature> Features>
+ : Processor<Name, NoItineraries, Features>;
 
-// --- Target ---------------------------------------------------------------
+def DummyFeature : SubtargetFeature<"dummy", "isDummyMode",
+                                    "true", "unused feature">;
+
+def ALU32 : SubtargetFeature<"alu32", "HasAlu32", "true",
+                             "Enable ALU32 instructions">;
+
+def DwarfRIS: SubtargetFeature<"dwarfris", "UseDwarfRIS", "true",
+                               "Disable MCAsmInfo DwarfUsesRelocationsAcrossSections">;
+
+def MisalignedMemAccess : SubtargetFeature<"allows-misaligned-mem-access",
+                                           "AllowsMisalignedMemAccess", "true",
+                                           "Allows misaligned memory access">;
+
+def AllowBuiltinCall : SubtargetFeature<"allow-builtin-calls",
+                                        "AllowBuiltinCalls", "true",
+                                        "Allow calls to builtin functions">;
+
+def : Proc<"generic", []>;
+def : Proc<"v1", []>;
+def : Proc<"v2", []>;
+def : Proc<"v3", [ALU32]>;
+def : Proc<"v4", [ALU32]>;
+def : Proc<"probe", []>;
+
+def RubiniusInstPrinter : AsmWriter {
+  string AsmWriterClassName  = "InstPrinter";
+  bit isMCAsmWriter = 1;
+}
+
+def RubiniusAsmParser : AsmParser {
+  bit HasMnemonicFirst = 0;
+}
+
+def RubiniusAsmParserVariant : AsmParserVariant {
+  int Variant = 0;
+  string Name = "Rubinius";
+  string BreakCharacters = ".";
+  string TokenizingCharacters = "#()[]=:.<>!+*%/";
+}
 
 def Rubinius : Target {
   let InstructionSet = RubiniusInstrInfo;
+  let AssemblyWriters = [RubiniusInstPrinter];
+  let AssemblyParsers = [RubiniusAsmParser];
+  let AssemblyParserVariants = [RubiniusAsmParserVariant];
 }
-
-// --- Registers ------------------------------------------------------------
-
-class RReg<string N, int Enc> : Register<N> {
-  let HWEncoding = Enc;
-  let Namespace = "Rubinius";
-}
-
-def R0 : RReg<"r0", 0>;
-def R1 : RReg<"r1", 1>;
-def R2 : RReg<"r2", 2>;
-def R3 : RReg<"r3", 3>;
-
-def GPR : RegisterClass<"Rubinius", [i64], 32,
-                        (add R0, R1, R2, R3)>;
-
-// --- Instructions ---------------------------------------------------------
-
-class RInst<string Asm> : Instruction {
-  let Namespace      = "Rubinius";
-  let OutOperandList = (outs);
-  let InOperandList  = (ins);
-  let AsmString      = Asm;
-  field bits<32> Inst;
-  let Size = 4;
-}
-
-def NOP : RInst<"nop"> { let Inst = 0; }

@@ -1,46 +1,62 @@
 add_llvm_component_group(Rubinius)
 
-# TableGen setup: all Rubinius .td defs should be rooted at Rubinius.td
 set(LLVM_TARGET_DEFINITIONS Rubinius.td)
 
-# Generate the backend's TableGen outputs.
-tablegen(LLVM RubiniusGenRegisterInfo.inc   -gen-register-info)
-tablegen(LLVM RubiniusGenInstrInfo.inc      -gen-instr-info)
-tablegen(LLVM RubiniusGenSubtargetInfo.inc  -gen-subtarget)
-tablegen(LLVM RubiniusGenAsmWriter.inc      -gen-asm-writer)
-tablegen(LLVM RubiniusGenMCCodeEmitter.inc  -gen-emitter)
+tablegen(LLVM RubiniusGenAsmMatcher.inc -gen-asm-matcher)
+tablegen(LLVM RubiniusGenAsmWriter.inc -gen-asm-writer)
+tablegen(LLVM RubiniusGenCallingConv.inc -gen-callingconv)
+tablegen(LLVM RubiniusGenDAGISel.inc -gen-dag-isel)
+tablegen(LLVM RubiniusGenInstrInfo.inc -gen-instr-info)
+tablegen(LLVM RubiniusGenMCCodeEmitter.inc -gen-emitter)
+tablegen(LLVM RubiniusGenRegisterInfo.inc -gen-register-info)
+tablegen(LLVM RubiniusGenSDNodeInfo.inc -gen-sd-node-info)
+tablegen(LLVM RubiniusGenSubtargetInfo.inc -gen-subtarget)
+tablegen(LLVM RubiniusGenGlobalISel.inc -gen-global-isel)
+tablegen(LLVM RubiniusGenRegisterBank.inc -gen-register-bank)
 
-# Make these TableGen outputs visible to other pieces (MCTargetDesc, etc.).
 add_public_tablegen_target(RubiniusCommonTableGen)
 
-# The core codegen library for the Rubinius backend.
-# Name must match the component in llvm/lib/Target/Rubinius/LLVMBuild.txt (RubiniusCodeGen).
 add_llvm_target(RubiniusCodeGen
+  GISel/RubiniusCallLowering.cpp
+  GISel/RubiniusInstructionSelector.cpp
+  GISel/RubiniusRegisterBankInfo.cpp
+  GISel/RubiniusLegalizerInfo.cpp
   RubiniusAsmPrinter.cpp
+  RubiniusFrameLowering.cpp
+  RubiniusInstrInfo.cpp
   RubiniusISelDAGToDAG.cpp
   RubiniusISelLowering.cpp
-  RubiniusInstrInfo.cpp
   RubiniusMCInstLower.cpp
   RubiniusRegisterInfo.cpp
+  RubiniusSelectionDAGInfo.cpp
   RubiniusSubtarget.cpp
-  RubiniusTargetInfo.cpp
+  RubiniusTargetLoweringObjectFile.cpp
   RubiniusTargetMachine.cpp
+  BTFDebug.cpp
 
   LINK_COMPONENTS
-    AsmPrinter
-    CodeGen
-    Core
-    MC
-    SelectionDAG
-    Support
-    Target
-    RubiniusDesc
-    RubiniusInfo
+  Analysis
+  AsmPrinter
+  RubiniusDesc
+  RubiniusInfo
+  CodeGen
+  CodeGenTypes
+  Core
+  GlobalISel
+  IPO
+  MC
+  Passes
+  Scalar
+  SelectionDAG
+  Support
+  Target
+  TargetParser
+  TransformUtils
 
   ADD_TO_COMPONENT
-    Rubinius
-)
+  Rubinius
+  )
 
-# These subdirectories define the MC-layer and target-info libraries.
+add_subdirectory(AsmParser)
 add_subdirectory(MCTargetDesc)
 add_subdirectory(TargetInfo)

@@ -1,15 +1,16 @@
 add_llvm_component_library(LLVMRubiniusDesc
   RubiniusMCTargetDesc.cpp
-  RubiniusMCAsmInfo.cpp
+  RubiniusAsmBackend.cpp
+  RubiniusInstPrinter.cpp
   RubiniusMCCodeEmitter.cpp
-
-  DEPENDS
-    RubiniusCommonTableGen
+  RubiniusELFObjectWriter.cpp
 
   LINK_COMPONENTS
-    MC
-    Support
+  MC
+  RubiniusInfo
+  Support
+  TargetParser
 
   ADD_TO_COMPONENT
-    Rubinius
-)
+  Rubinius
+  )

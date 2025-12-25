@@ -2,7 +2,6 @@
 
 set -x
 
-rm -rf "$1"
 cmake -S llvm -B "$1" -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
   -DLLVM_ENABLE_PROJECTS="mlir" \
